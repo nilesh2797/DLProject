@@ -23,14 +23,19 @@ class PerceiverLM(nn.Module):
         num_blocks=1,
         num_self_attn_per_block=12,
         dropout: float = 0.0,
-        lm = True
+        per_token_decoder = True,
+        num_query_tasks = 1
     ):
         super().__init__()
-        self.lm = lm
+        self.per_token_decoder = per_token_decoder
+        self.num_query_tasks = num_query_tasks
         self.token_embedding = nn.Embedding(vocab_size, embedding_dim)
         self.position_embedding = nn.Embedding(max_seq_len, embedding_dim)
-        self.query_embedding = nn.Embedding(max_seq_len, embedding_dim)
+        self.query_position_embedding = nn.Embedding(max_seq_len, embedding_dim)
         self.decoder_token_bias = nn.Parameter(torch.randn(vocab_size))
+        
+        self.query_task_embedding = nn.Embedding(num_query_tasks, embedding_dim)
+        
         if v_out_dim is None: v_out_dim = latent_dim
         encoder = PerceiverEncoder(
             num_latents=num_latents,
@@ -60,7 +65,10 @@ class PerceiverLM(nn.Module):
     def forward(
         self,
         inputs: torch.Tensor,
-        mask: Optional[torch.Tensor] = None
+        mask: Optional[torch.Tensor] = None,
+        tasks: Optional[torch.Tensor] = None,
+        tasks_mask: Optional[torch.Tensor] = None,
+        mlm = False,
     ):
         """
         Args:
@@ -70,18 +78,28 @@ class PerceiverLM(nn.Module):
             Tensor of shape (batch_size, seq_len, vocab_size).
         """
         seq_len = inputs.size(1)
+        batch_size = inputs.size(0)
         token_embeddings = self.token_embedding(inputs)
         positions_ids = torch.arange(seq_len, device=inputs.device).view(1, -1)
         position_embeddings = self.position_embedding(positions_ids)
         embeddings = token_embeddings + position_embeddings
-        query_embeddings = self.query_embedding(positions_ids)
+        
+        if self.per_token_decoder:
+            query_embeddings = self.query_position_embedding(positions_ids).repeat(batch_size, 1, 1)
+            query_mask = mask
+        elif tasks is None:
+            query_embeddings = self.query_task_embedding.weight.repeat(batch_size, 1, 1)
+            query_mask = None
+        else:
+            query_embeddings = self.query_task_embedding(tasks)
+            query_mask = tasks_mask
         outputs = self.perceiver(
             inputs=embeddings,
             query=query_embeddings,
             input_mask=mask,
-            query_mask=mask
+            query_mask=query_mask
         )
-        if self.lm:
+        if mlm:
             logits = torch.matmul(outputs, self.token_embedding.weight.T) + self.decoder_token_bias
             return logits
         return outputs
@@ -97,7 +115,7 @@ class PerceiverLM(nn.Module):
         state_dict['token_embedding.weight'] = params['embed']['embeddings']
         state_dict['decoder_token_bias'] = params['embedding_decoder']['bias']
         state_dict['position_embedding.weight'] = params['trainable_position_encoding']['pos_embs']
-        state_dict['query_embedding.weight'] = params['basic_decoder/~/trainable_position_encoding']['pos_embs']
+        state_dict['query_position_embedding.weight'] = params['basic_decoder/~/trainable_position_encoding']['pos_embs']
         state_dict[f'{model_enc_base}latents'] = params[f'{params_enc_base}trainable_position_encoding']['pos_embs']
 
         def copy_attention_params(state_dict, model_base, params_base):
@@ -136,4 +154,4 @@ class PerceiverLM(nn.Module):
             state_dict = copy_attention_params(state_dict, f'{model_enc_base}self_attention_block.{i}.', f'{params_enc_base}self_attention{"_%d"%i if i else ""}/')
 
         state_dict = {k: torch.tensor(v) for k,v in state_dict.items()}
-        self.load_state_dict(state_dict)
+        print(self.load_state_dict(state_dict, strict=False))

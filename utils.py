@@ -49,7 +49,7 @@ def read_sparse_mat(filename, use_xclib=True):
             score_mat = sp.csr_matrix((data, indices, indptr), (nr, nc))
             del data, indices, indptr
             return score_mat
-        
+
 from xclib.utils.sparse import rank as sp_rank
 
 def _topk(rank_mat, K, inplace=False):
@@ -111,3 +111,32 @@ def XCMetrics(score_mat, X_Y, inv_prop, disp = True, fname = None, method = 'Met
         elif os.path.splitext(fname)[-1] == '.tsv': df.to_csv(fname, sep='\t')  
         else: print(f'ERROR: File extension {os.path.splitext(fname)[-1]} in {fname} not supported')
     return df
+
+
+# +
+class bcolors:
+    purple = '\033[95m'
+    blue = '\033[94m'
+    green = '\033[92m'
+    warn = '\033[93m' # dark yellow
+    fail = '\033[91m' # dark red
+    white = '\033[37m'
+    yellow = '\033[33m'
+    red = '\033[31m'
+    
+    ENDC = '\033[0m'
+    bold = '\033[1m'
+    underline = '\033[4m'
+    reverse = '\033[7m'
+    
+    on_grey = '\033[40m'
+    on_yellow = '\033[43m'
+    on_red = '\033[41m'
+    on_blue = '\033[44m'
+    on_green = '\033[42m'
+    on_magenta = '\033[45m'
+    
+def _c(*args, attr='bold'):
+    string = ''.join([bcolors.__dict__[a] for a in attr.split()])
+    string += ' '.join([str(arg) for arg in args])+bcolors.ENDC
+    return string
