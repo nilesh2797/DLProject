@@ -20,6 +20,8 @@ class PerceiverEncoder(nn.Module):
         num_blocks: int = 4,
         qk_out_dim: Optional[int] = None,
         v_out_dim: Optional[int] = None,
+        self_qk_out_dim: Optional[int] = 0,
+        self_v_out_dim: Optional[int] = 0,
         num_cross_attn_heads: int = 1,
         num_self_attn_heads: int = 8,
         cross_attn_widening_factor: int = 1,
@@ -60,7 +62,9 @@ class PerceiverEncoder(nn.Module):
         """
         super().__init__()
         self.num_blocks = num_blocks
-
+        self_qk_out_dim = None if self_qk_out_dim is None else qk_out_dim
+        self_v_out_dim = None if self_v_out_dim is None else v_out_dim
+        
         self.latents = nn.Parameter(torch.randn(num_latents, latent_dim))
         self.cross_attn = CrossAttention(
             kv_dim=input_dim,
@@ -78,8 +82,8 @@ class PerceiverEncoder(nn.Module):
                 hidden_dim=latent_dim,
                 widening_factor=self_attn_widening_factor,
                 num_heads=num_self_attn_heads,
-                qk_out_dim=qk_out_dim,
-                v_out_dim=v_out_dim,
+                qk_out_dim=self_qk_out_dim,
+                v_out_dim=self_v_out_dim,
                 dropout=dropout,
                 attention_dropout=self_attention_dropout
             ) for _ in range(num_self_attn_per_block)
