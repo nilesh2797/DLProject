@@ -4,3 +4,4 @@ deepmind_assets/imagenet_perceiver.pystate
 Results/
 Datasets
 data
+*.DS_Store
